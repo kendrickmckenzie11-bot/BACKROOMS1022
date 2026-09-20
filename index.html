@@ -10,7 +10,7 @@
             overflow: hidden;
             background-color: #000;
             font-family: 'Courier New', Courier, monospace;
-            cursor: none; /* Hide cursor for immersion */
+            cursor: none;
         }
         canvas {
             display: block;
@@ -33,7 +33,7 @@
             width: 100%;
             height: 100%;
             pointer-events: none;
-            background: radial-gradient(circle, transparent 40%, rgba(0,0,0,0.8) 100%);
+            background: radial-gradient(circle, transparent 50%, rgba(0,0,0,0.6) 100%);
             z-index: 10;
         }
         #grain {
@@ -43,7 +43,7 @@
             width: 100%;
             height: 100%;
             pointer-events: none;
-            opacity: 0.05;
+            opacity: 0.04;
             z-index: 11;
             background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
         }
@@ -54,7 +54,6 @@
     <div id="vignette"></div>
     <div id="grain"></div>
 
-    <!-- Import Three.js and Post Processing from CDN -->
     <script type="importmap">
         {
             "imports": {
@@ -72,25 +71,28 @@
         import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
         import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 
-        // --- CONFIGURATION ---
+        // --- CONFIGURATION (FIXED LIGHTING) ---
         const CONFIG = {
             moveSpeed: 3.0,
             mouseSensitivity: 0.002,
-            roomSize: 20, // Size of the grid cell
+            roomSize: 20,
             wallHeight: 3.5,
             textureRes: 512,
-            fogColor: 0x1a1a1a,
-            fogDensity: 0.05
+            fogColor: 0x2a2a2a, // Lighter fog so it doesn't turn black
+            fogDensity: 0.025,  // Reduced from 0.05 to let light travel further
         };
 
         // --- SCENE SETUP ---
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x000000);
-        // Exponential fog for that deep, murky look
+        scene.background = new THREE.Color(0x1a1a1a); // Dark grey background instead of black
         scene.fog = new THREE.FogExp2(CONFIG.fogColor, CONFIG.fogDensity);
 
+        // Add a tiny bit of ambient light so shadows aren't pitch black
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.15);
+        scene.add(ambientLight);
+
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
-        camera.position.set(0, 1.6, 0); // Average human height
+        camera.position.set(0, 1.6, 0);
 
         const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -98,147 +100,75 @@
         renderer.shadowMap.enabled = true;
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        renderer.toneMappingExposure = 1.0;
+        renderer.toneMappingExposure = 1.5; // Increased exposure significantly
         document.body.appendChild(renderer.domElement);
 
-        // --- PROCEDURAL TEXTURES (No external files needed) ---
-        function createNoiseTexture(width, height, baseColor, noiseIntensity) {
-            const canvas = document.createElement('canvas');
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            
-            // Base color
-            ctx.fillStyle = baseColor;
-            ctx.fillRect(0, 0, width, height);
-
-            // Noise
-            const imageData = ctx.getImageData(0, 0, width, height);
-            const data = imageData.data;
-            for (let i = 0; i < data.length; i += 4) {
-                const noise = (Math.random() - 0.5) * noiseIntensity;
-                data[i] += noise;
-                data[i+1] += noise;
-                data[i+2] += noise;
-            }
-            ctx.putImageData(imageData, 0, 0);
-            return new THREE.CanvasTexture(canvas);
-        }
-
+        // --- PROCEDURAL TEXTURES ---
         function createWallpaperTexture() {
             const canvas = document.createElement('canvas');
-            canvas.width = 512;
-            canvas.height = 512;
+            canvas.width = 512; canvas.height = 512;
             const ctx = canvas.getContext('2d');
-
-            // Base Yellow
-            ctx.fillStyle = '#c2b280';
-            ctx.fillRect(0, 0, 512, 512);
-
-            // Vertical Stripes (Pattern)
+            ctx.fillStyle = '#c2b280'; ctx.fillRect(0, 0, 512, 512);
             ctx.fillStyle = '#b0a070';
-            for (let i = 0; i < 512; i += 64) {
-                ctx.fillRect(i, 0, 32, 512);
-            }
-
-            // Stains and Grime
+            for (let i = 0; i < 512; i += 64) { ctx.fillRect(i, 0, 32, 512); }
             ctx.globalAlpha = 0.1;
             for (let i = 0; i < 50; i++) {
                 ctx.fillStyle = Math.random() > 0.5 ? '#5a4a30' : '#8a7a50';
-                ctx.beginPath();
-                ctx.arc(Math.random() * 512, Math.random() * 512, Math.random() * 100, 0, Math.PI * 2);
-                ctx.fill();
+                ctx.beginPath(); ctx.arc(Math.random() * 512, Math.random() * 512, Math.random() * 100, 0, Math.PI * 2); ctx.fill();
             }
             ctx.globalAlpha = 1.0;
-
-            // Noise
             const imageData = ctx.getImageData(0, 0, 512, 512);
             const data = imageData.data;
             for (let i = 0; i < data.length; i += 4) {
                 const noise = (Math.random() - 0.5) * 30;
-                data[i] += noise;
-                data[i+1] += noise;
-                data[i+2] += noise;
+                data[i] += noise; data[i+1] += noise; data[i+2] += noise;
             }
             ctx.putImageData(imageData, 0, 0);
-
             const texture = new THREE.CanvasTexture(canvas);
-            texture.wrapS = THREE.RepeatWrapping;
-            texture.wrapT = THREE.RepeatWrapping;
+            texture.wrapS = THREE.RepeatWrapping; texture.wrapT = THREE.RepeatWrapping;
             texture.repeat.set(2, 2);
             return texture;
         }
 
         function createCarpetTexture() {
             const canvas = document.createElement('canvas');
-            canvas.width = 512;
-            canvas.height = 512;
+            canvas.width = 512; canvas.height = 512;
             const ctx = canvas.getContext('2d');
-
-            // Base Carpet Color (Damp, dark grey/yellow)
-            ctx.fillStyle = '#8a8a70';
-            ctx.fillRect(0, 0, 512, 512);
-
-            // Carpet Texture (Short fibers)
+            ctx.fillStyle = '#8a8a70'; ctx.fillRect(0, 0, 512, 512);
             for (let i = 0; i < 100000; i++) {
                 ctx.fillStyle = Math.random() > 0.5 ? '#7a7a60' : '#9a9a80';
                 ctx.fillRect(Math.random() * 512, Math.random() * 512, 2, 2);
             }
-
-            // Damp patches
             ctx.globalAlpha = 0.2;
             for (let i = 0; i < 20; i++) {
                 ctx.fillStyle = '#3a3a30';
-                ctx.beginPath();
-                ctx.arc(Math.random() * 512, Math.random() * 512, Math.random() * 80, 0, Math.PI * 2);
-                ctx.fill();
+                ctx.beginPath(); ctx.arc(Math.random() * 512, Math.random() * 512, Math.random() * 80, 0, Math.PI * 2); ctx.fill();
             }
             ctx.globalAlpha = 1.0;
-
             const texture = new THREE.CanvasTexture(canvas);
-            texture.wrapS = THREE.RepeatWrapping;
-            texture.wrapT = THREE.RepeatWrapping;
+            texture.wrapS = THREE.RepeatWrapping; texture.wrapT = THREE.RepeatWrapping;
             texture.repeat.set(4, 4);
             return texture;
         }
 
         function createCeilingTexture() {
             const canvas = document.createElement('canvas');
-            canvas.width = 512;
-            canvas.height = 512;
+            canvas.width = 512; canvas.height = 512;
             const ctx = canvas.getContext('2d');
-
-            // Base Tile Color
-            ctx.fillStyle = '#d0d0d0';
-            ctx.fillRect(0, 0, 512, 512);
-
-            // Tile Grid
-            ctx.strokeStyle = '#a0a0a0';
-            ctx.lineWidth = 4;
+            ctx.fillStyle = '#d0d0d0'; ctx.fillRect(0, 0, 512, 512);
+            ctx.strokeStyle = '#a0a0a0'; ctx.lineWidth = 4;
             for (let i = 0; i <= 512; i += 128) {
-                ctx.beginPath();
-                ctx.moveTo(i, 0);
-                ctx.lineTo(i, 512);
-                ctx.stroke();
-                ctx.beginPath();
-                ctx.moveTo(0, i);
-                ctx.lineTo(512, i);
-                ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 512); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(512, i); ctx.stroke();
             }
-
-            // Water stains
             ctx.globalAlpha = 0.3;
             for (let i = 0; i < 10; i++) {
                 ctx.fillStyle = '#8a7a50';
-                ctx.beginPath();
-                ctx.arc(Math.random() * 512, Math.random() * 512, Math.random() * 60, 0, Math.PI * 2);
-                ctx.fill();
+                ctx.beginPath(); ctx.arc(Math.random() * 512, Math.random() * 512, Math.random() * 60, 0, Math.PI * 2); ctx.fill();
             }
             ctx.globalAlpha = 1.0;
-
             const texture = new THREE.CanvasTexture(canvas);
-            texture.wrapS = THREE.RepeatWrapping;
-            texture.wrapT = THREE.RepeatWrapping;
+            texture.wrapS = THREE.RepeatWrapping; texture.wrapT = THREE.RepeatWrapping;
             texture.repeat.set(4, 4);
             return texture;
         }
@@ -249,106 +179,79 @@
         const ceilingTexture = createCeilingTexture();
 
         const wallMaterial = new THREE.MeshStandardMaterial({ 
-            map: wallTexture, 
-            roughness: 0.8, 
-            metalness: 0.1,
-            bumpMap: wallTexture,
-            bumpScale: 0.05
+            map: wallTexture, roughness: 0.8, metalness: 0.1,
+            bumpMap: wallTexture, bumpScale: 0.05
         });
         
         const floorMaterial = new THREE.MeshStandardMaterial({ 
-            map: carpetTexture, 
-            roughness: 1.0, 
-            metalness: 0.0,
-            bumpMap: carpetTexture,
-            bumpScale: 0.02
+            map: carpetTexture, roughness: 1.0, metalness: 0.0,
+            bumpMap: carpetTexture, bumpScale: 0.02
         });
 
         const ceilingMaterial = new THREE.MeshStandardMaterial({ 
-            map: ceilingTexture, 
-            roughness: 0.9, 
-            metalness: 0.0
+            map: ceilingTexture, roughness: 0.9, metalness: 0.0
         });
 
-        // Create a grid of rooms
-        const gridSize = 5; // 5x5 grid
+        const gridSize = 5;
         const roomWidth = CONFIG.roomSize;
         const roomDepth = CONFIG.roomSize;
 
         for (let x = -gridSize; x <= gridSize; x++) {
             for (let z = -gridSize; z <= gridSize; z++) {
-                
                 // Floor
-                const floorGeo = new THREE.PlaneGeometry(roomWidth, roomDepth);
-                const floor = new THREE.Mesh(floorGeo, floorMaterial);
+                const floor = new THREE.Mesh(new THREE.PlaneGeometry(roomWidth, roomDepth), floorMaterial);
                 floor.rotation.x = -Math.PI / 2;
                 floor.position.set(x * roomWidth, 0, z * roomDepth);
                 floor.receiveShadow = true;
                 scene.add(floor);
 
                 // Ceiling
-                const ceilingGeo = new THREE.PlaneGeometry(roomWidth, roomDepth);
-                const ceiling = new THREE.Mesh(ceilingGeo, ceilingMaterial);
+                const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(roomWidth, roomDepth), ceilingMaterial);
                 ceiling.rotation.x = Math.PI / 2;
                 ceiling.position.set(x * roomWidth, CONFIG.wallHeight, z * roomDepth);
                 ceiling.receiveShadow = true;
                 scene.add(ceiling);
 
-                // Walls (Randomly place walls to create maze)
-                // We check neighbors to see if we should place a wall
+                // Walls
                 const wallThickness = 0.2;
                 
-                // North Wall (Z-)
-                if (Math.random() > 0.3) { // 70% chance of wall
-                    const wallGeo = new THREE.BoxGeometry(roomWidth, CONFIG.wallHeight, wallThickness);
-                    const wall = new THREE.Mesh(wallGeo, wallMaterial);
+                if (Math.random() > 0.3) {
+                    const wall = new THREE.Mesh(new THREE.BoxGeometry(roomWidth, CONFIG.wallHeight, wallThickness), wallMaterial);
                     wall.position.set(x * roomWidth, CONFIG.wallHeight / 2, z * roomDepth - roomDepth / 2);
-                    wall.castShadow = true;
-                    wall.receiveShadow = true;
+                    wall.castShadow = true; wall.receiveShadow = true;
                     scene.add(wall);
                 }
-
-                // South Wall (Z+)
                 if (Math.random() > 0.3) {
-                    const wallGeo = new THREE.BoxGeometry(roomWidth, CONFIG.wallHeight, wallThickness);
-                    const wall = new THREE.Mesh(wallGeo, wallMaterial);
+                    const wall = new THREE.Mesh(new THREE.BoxGeometry(roomWidth, CONFIG.wallHeight, wallThickness), wallMaterial);
                     wall.position.set(x * roomWidth, CONFIG.wallHeight / 2, z * roomDepth + roomDepth / 2);
-                    wall.castShadow = true;
-                    wall.receiveShadow = true;
+                    wall.castShadow = true; wall.receiveShadow = true;
                     scene.add(wall);
                 }
-
-                // West Wall (X-)
                 if (Math.random() > 0.3) {
-                    const wallGeo = new THREE.BoxGeometry(wallThickness, CONFIG.wallHeight, roomDepth);
-                    const wall = new THREE.Mesh(wallGeo, wallMaterial);
+                    const wall = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, CONFIG.wallHeight, roomDepth), wallMaterial);
                     wall.position.set(x * roomWidth - roomWidth / 2, CONFIG.wallHeight / 2, z * roomDepth);
-                    wall.castShadow = true;
-                    wall.receiveShadow = true;
+                    wall.castShadow = true; wall.receiveShadow = true;
                     scene.add(wall);
                 }
-
-                // East Wall (X+)
                 if (Math.random() > 0.3) {
-                    const wallGeo = new THREE.BoxGeometry(wallThickness, CONFIG.wallHeight, roomDepth);
-                    const wall = new THREE.Mesh(wallGeo, wallMaterial);
+                    const wall = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, CONFIG.wallHeight, roomDepth), wallMaterial);
                     wall.position.set(x * roomWidth + roomWidth / 2, CONFIG.wallHeight / 2, z * roomDepth);
-                    wall.castShadow = true;
-                    wall.receiveShadow = true;
+                    wall.castShadow = true; wall.receiveShadow = true;
                     scene.add(wall);
                 }
 
-                // Lights (Fluorescent panels)
+                // --- FIXED LIGHTING ---
                 if (Math.random() > 0.4) {
-                    const lightGeo = new THREE.PlaneGeometry(2, 2);
+                    // Light Panel Mesh
                     const lightMat = new THREE.MeshBasicMaterial({ color: 0xffffee });
-                    const lightMesh = new THREE.Mesh(lightGeo, lightMat);
+                    const lightMesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), lightMat);
                     lightMesh.rotation.x = Math.PI / 2;
                     lightMesh.position.set(x * roomWidth, CONFIG.wallHeight - 0.1, z * roomDepth);
                     scene.add(lightMesh);
 
-                    // Point Light
-                    const pointLight = new THREE.PointLight(0xffffee, 1.5, 20);
+                    // Point Light - INCREASED INTENSITY AND DISTANCE
+                    // Changed from 1.5 intensity / 20 distance to 5.0 intensity / 40 distance
+                    const pointLight = new THREE.PointLight(0xffffee, 5.0, 40);
                     pointLight.position.set(x * roomWidth, CONFIG.wallHeight - 0.5, z * roomDepth);
                     pointLight.castShadow = true;
                     pointLight.shadow.mapSize.width = 512;
@@ -356,26 +259,24 @@
                     pointLight.shadow.bias = -0.005;
                     scene.add(pointLight);
 
-                    // Flicker Logic
                     if (Math.random() > 0.7) {
                         pointLight.userData.flicker = true;
-                        pointLight.userData.baseIntensity = 1.5;
+                        pointLight.userData.baseIntensity = 5.0; // Updated base intensity
                         pointLight.userData.speed = Math.random() * 10 + 5;
                     }
                 }
             }
         }
 
-        // --- POST PROCESSING (Motion Blur & Effects) ---
+        // --- POST PROCESSING ---
         const composer = new EffectComposer(renderer);
         const renderPass = new RenderPass(scene, camera);
         composer.addPass(renderPass);
 
-        // Bloom for the lights
-        const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.5, 0.4, 0.85);
+        // Reduced Bloom slightly so it doesn't wash out the textures
+        const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.3, 0.4, 0.85);
         composer.addPass(bloomPass);
 
-        // Custom Motion Blur Shader
         const MotionBlurShader = {
             uniforms: {
                 "tDiffuse": { value: null },
@@ -384,33 +285,22 @@
             },
             vertexShader: `
                 varying vec2 vUv;
-                void main() {
-                    vUv = uv;
-                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-                }
+                void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
             `,
             fragmentShader: `
                 uniform sampler2D tDiffuse;
                 uniform float strength;
                 uniform vec2 resolution;
                 varying vec2 vUv;
-
                 void main() {
                     vec4 sum = vec4(0.0);
                     vec2 texcoord = vUv;
-                    
-                    // Simple directional blur based on screen movement
-                    // We approximate motion by blurring horizontally and vertically
-                    // In a real engine, you'd use a velocity buffer, but for HTML this is a cheap fake.
-                    
                     float blur = strength * 0.005;
-                    
                     sum += texture2D(tDiffuse, texcoord) * 0.4;
                     sum += texture2D(tDiffuse, texcoord + vec2(blur, 0.0)) * 0.15;
                     sum += texture2D(tDiffuse, texcoord - vec2(blur, 0.0)) * 0.15;
                     sum += texture2D(tDiffuse, texcoord + vec2(0.0, blur)) * 0.15;
                     sum += texture2D(tDiffuse, texcoord - vec2(0.0, blur)) * 0.15;
-                    
                     gl_FragColor = sum;
                 }
             `
@@ -419,22 +309,15 @@
         const motionBlurPass = new ShaderPass(MotionBlurShader);
         composer.addPass(motionBlurPass);
 
-        // FXAA (Anti-aliasing)
         const fxaaPass = new ShaderPass(FXAAShader);
         const pixelRatio = renderer.getPixelRatio();
         fxaaPass.uniforms['resolution'].value.x = 1 / (window.innerWidth * pixelRatio);
         fxaaPass.uniforms['resolution'].value.y = 1 / (window.innerHeight * pixelRatio);
         composer.addPass(fxaaPass);
 
-
-        // --- CONTROLS (Pointer Lock) ---
+        // --- CONTROLS ---
         const controls = {
-            forward: false,
-            backward: false,
-            left: false,
-            right: false,
-            mouseX: 0,
-            mouseY: 0,
+            forward: false, backward: false, left: false, right: false,
             isLocked: false
         };
 
@@ -443,9 +326,7 @@
         const euler = new THREE.Euler(0, 0, 0, 'YXZ');
 
         document.addEventListener('click', () => {
-            if (!controls.isLocked) {
-                document.body.requestPointerLock();
-            }
+            if (!controls.isLocked) document.body.requestPointerLock();
         });
 
         document.addEventListener('pointerlockchange', () => {
@@ -456,14 +337,10 @@
             if (controls.isLocked) {
                 const movementX = event.movementX || 0;
                 const movementY = event.movementY || 0;
-                
                 euler.setFromQuaternion(camera.quaternion);
                 euler.y -= movementX * CONFIG.mouseSensitivity;
                 euler.x -= movementY * CONFIG.mouseSensitivity;
-                
-                // Clamp vertical look
                 euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, euler.x));
-                
                 camera.quaternion.setFromEuler(euler);
             }
         });
@@ -494,31 +371,19 @@
 
             const delta = clock.getDelta();
 
-            // Movement
             if (controls.isLocked) {
-                velocity.x -= velocity.x * 10.0 * delta;
-                velocity.z -= velocity.z * 10.0 * delta;
-
                 direction.z = Number(controls.forward) - Number(controls.backward);
                 direction.x = Number(controls.right) - Number(controls.left);
                 direction.normalize();
 
-                if (controls.forward || controls.backward) velocity.z -= direction.z * 400.0 * delta;
-                if (controls.left || controls.right) velocity.x -= direction.x * 400.0 * delta;
-
-                // Simple collision (Raycasting)
-                // We check the direction we are moving and if there's a wall close by, we stop.
-                // This is a basic implementation. For a full game, you'd use a physics engine.
                 const moveDistance = CONFIG.moveSpeed * delta;
                 
                 const forwardVector = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
                 const rightVector = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
                 
-                // Raycast Forward
                 const raycaster = new THREE.Raycaster(camera.position, forwardVector);
                 const intersectsForward = raycaster.intersectObjects(scene.children, true);
                 
-                // Raycast Right
                 const raycasterRight = new THREE.Raycaster(camera.position, rightVector);
                 const intersectsRight = raycasterRight.intersectObjects(scene.children, true);
 
@@ -528,49 +393,38 @@
                 if (intersectsForward.length > 0 && intersectsForward[0].distance < 0.8) canMoveForward = false;
                 if (intersectsRight.length > 0 && intersectsRight[0].distance < 0.8) canMoveRight = false;
 
-                // Apply movement
                 if (controls.forward && canMoveForward) camera.position.addScaledVector(forwardVector, moveDistance);
                 if (controls.backward && canMoveForward) camera.position.addScaledVector(forwardVector, -moveDistance);
                 if (controls.right && canMoveRight) camera.position.addScaledVector(rightVector, moveDistance);
                 if (controls.left && canMoveRight) camera.position.addScaledVector(rightVector, -moveDistance);
             }
 
-            // Dynamic Light Flickering
+            // Flickering
             scene.children.forEach(child => {
                 if (child.isPointLight && child.userData.flicker) {
                     const time = clock.getElapsedTime();
                     const flicker = Math.sin(time * child.userData.speed) * 0.5 + 0.5;
                     child.intensity = child.userData.baseIntensity * (0.8 + flicker * 0.4);
-                    
-                    // Random chance to turn off completely for a split second
-                    if (Math.random() > 0.98) {
-                        child.intensity = 0;
-                    }
+                    if (Math.random() > 0.98) child.intensity = 0;
                 }
             });
 
-            // Update Motion Blur Strength based on movement speed
-            // (Fake velocity calculation)
-            const speed = velocity.length();
-            motionBlurPass.uniforms['strength'].value = Math.min(speed * 0.01, 1.0);
+            // Motion Blur update
+            motionBlurPass.uniforms['strength'].value = Math.min(velocity.length() * 0.01, 1.0);
 
-            // Render
             composer.render();
         }
 
-        // Handle Resize
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
             composer.setSize(window.innerWidth, window.innerHeight);
-            
             const pixelRatio = renderer.getPixelRatio();
             fxaaPass.uniforms['resolution'].value.x = 1 / (window.innerWidth * pixelRatio);
             fxaaPass.uniforms['resolution'].value.y = 1 / (window.innerHeight * pixelRatio);
         });
 
-        // Start
         document.getElementById('loading').style.display = 'none';
         animate();
 
